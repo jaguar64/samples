@@ -1,0 +1,12 @@
+gasm -o -CGPU -R1 -S -Ih:\jagstuf\bin\\ match.gas
+ltxconv -a match
+dump match.bin > match.dmp
+
+gasm -o -CGPU -R1 -S -Ih:\jagstuf\bin\\ fifo_r1.gas
+ltxconv -a fifo_r1
+dump fifo_r1.bin > fifo_r1.dmp
+
+gasm -o -CGPU -R1 -S -Ih:\jagstuf\bin\\ fifo_r3.gas
+ltxconv -a fifo_r3
+dump fifo_r3.bin > fifo_r3.dmp
+

@@ -1,0 +1,180 @@
+
+	ORG	$f03128
+
+	include		"jaguar.inc"
+	include		"cd_inits.inc"
+
+	XDEF		PTRPOS
+	XDEF		SETUP
+
+	XDEF		FIFO_READ
+	XDEF		HERE
+	XDEF		EXIT_ISR
+
+	TEMP		regequ		r28
+
+	CDdata		regequ		r27
+	Dataptr		regequ		r26
+
+;	CDdata		regequ		r1
+;	Dataptr		regequ		r2
+
+	Ptrloc		regequ		r0
+
+	ALIGN LONG
+
+PTRPOS:
+	ds.l	4
+;	ds.l	3
+
+JERRY_ISR:
+	movei	#G_FLAGS,r30
+	load	(r30),r29	;read the flags
+
+; Stack r25
+	subq	#4,r31
+	store	r25,(r31)
+
+; Stack r20
+	subq	#4,r31
+	store	r20,(r31)
+
+	movei	#BUTCH,r20
+
+; Stack r27
+	subq	#4,r31
+	store	r27,(r31)
+
+; Stack r26
+	subq	#4,r31
+	store	r26,(r31)
+
+; Stack r0
+	subq	#4,r31
+	store	r0,(r31)
+
+HERE:
+	move	pc,r25
+	movei	#(EXIT_ISR-HERE),r27
+	add	r27,r25
+
+; Is this a DSARX interrupt?
+
+;	movei	#BUTCH,r20		; moved for pipeline
+	load	(r20),r27		;check for DSARX int pending
+
+	btst	#13,r27
+	jr	z,fifo_read	; This should ALWAYS fall thru the first time
+
+; Set the match bit, to allow data
+	moveq	#3,r26		; enable FIFO only
+	store	r26,(r20)
+	addq	#$10,r20
+	load	(r20),r27
+	bset	#2,r27
+	store	r27,(r20)		; Disable SUBCODE match
+	
+; Now we clear the DSARX interrupt in Butch
+
+;	movei	#$dfff04,r20	;Butch DSA control register
+	subq	#12,r20		; does what the above says
+	load	(r20),r26	;Clears DSA pending interrupt 
+	addq	#6,r20
+	loadw	(r20),r27	; Read DSA response
+	btst	#10,r27		; Check for error
+	jr	nz,error
+	or	r26,r26
+	jump	(r25)
+	nop
+
+fifo_read:
+
+	move	pc,Ptrloc
+	movei	#(fifo_read-PTRPOS),TEMP
+	sub	TEMP,Ptrloc
+
+; Check for ERROR!!!!!!!!!!!!!!!!!!!!!
+
+	btst	#14,r27
+	jr	z,noerror
+	bset	#31,r27
+error:
+	addq	#$10,r20
+	load	(r20),TEMP
+	or	TEMP,TEMP
+	subq	#$10,r20
+	load	(Ptrloc),TEMP
+	addq	#8,Ptrloc
+	store	TEMP,(Ptrloc)
+;	addq	#4,Ptrloc
+;	store	r27,(Ptrloc)
+;	subq	#12,Ptrloc
+	subq	#8,Ptrloc
+
+noerror:
+
+	load	(Ptrloc),Dataptr	;get pointer
+
+; Check to see if we should stop
+	addq	#4,Ptrloc	
+	load	(Ptrloc),TEMP
+	subq	#4,Ptrloc	
+	cmp	Dataptr,TEMP
+	jr	pl,notend
+	nop
+	bclr	#0,r27
+	store	r27,(r20)
+
+notend:
+	movei	#FIFO_DATA,CDdata
+	moveq	#3,r20
+loptop:
+	load 	(CDdata),TEMP
+	load	(r20),r25
+	load	(CDdata),r30
+	addq	#4,Dataptr
+	store	TEMP,(Dataptr)
+	subq	#1,r20
+	addqt	#4,Dataptr
+	jr	pl,loptop
+	store	r30,(Dataptr)
+
+	store	Dataptr,(Ptrloc)
+
+exit_isr:
+	movei	#J_INT,r20	; Acknowledge in Jerry
+	moveq	#1,r28
+	bset	#8,r28		
+	storew	r28,(r20)
+
+; Stack r0
+	load	(r31),r0
+	addq	#4,r31
+
+; Stack r26
+	load	(r31),r26
+	addq	#4,r31
+
+; Stack r27
+	load	(r31),r27
+	addq	#4,r31
+
+; Stack r20
+	load	(r31),r20
+	addq	#4,r31
+
+; Stack r25
+	load	(r31),r25
+	addq	#4,r31
+
+	movei	#G_FLAGS,r30
+
+;r29 already has flags
+	bclr	#3,r29		;IMASK
+	bset	#10,r29		;Clear DSP int bit in TOM
+
+	load	(r31),r28	;Load return address
+	addq	#2,r28		;Fix it up
+	addq	#4,r31		
+	jump	(r28)		;Return
+	store	r29,(r30)	;Restore broken flags

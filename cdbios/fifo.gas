@@ -1,0 +1,303 @@
+
+	ORG	$f03000
+
+	include		"jaguar.inc"
+	include		"cd_inits.inc"
+
+	XDEF		PTRPOS
+	XDEF		SETUP
+	XDEF		test
+
+	TEMP		regequ		r28
+	CDdata		regequ		r1
+	Dataptr		regequ		r2
+	Ptrloc		regequ		r0
+
+; The beginning of GPU memory is being used for
+; storage
+; Set GPC to SETUP
+
+BEGIN:
+PTRPOS:
+	movei	#SETUP,r0
+	jump	(r0)
+	nop
+	nop
+	nop
+	nop
+
+EINT_ISR:
+
+	movei	#G_FLAGS,r30
+	load	(r30),r29	;read the flags
+
+; Stack r25
+	subq	#4,r31
+	move	r25,r28
+	store	r28,(r31)
+
+; Stack r20
+	subq	#4,r31
+	move	r20,r28
+	store	r28,(r31)
+
+; Stack r27
+	subq	#4,r31
+	move	r27,r28
+	store	r28,(r31)
+
+; Stack r26
+	subq	#4,r31
+	move	r26,r28
+	store	r28,(r31)
+
+; Stack r1
+	subq	#4,r31
+	move	r1,r28
+	store	r28,(r31)
+
+; Stack r2
+	subq	#4,r31
+	move	r2,r28
+	store	r28,(r31)
+
+; Stack r3
+	subq	#4,r31
+	move	r3,r28
+	store	r28,(r31)
+
+	movei	#exit_isr,r25
+
+; Is this a DSARX interrupt?
+
+	movei	#BUTCH,r20
+	load	(r20),r27		;check for DSARX int pending
+	btst	#13,r27
+	jr	z,fifo_read		;If not pending then do fifo reads
+	nop	
+
+; Toggle the match bit, to allow data
+	addq	#$10,r20
+	moveq	#4,r28
+	load	(r20),r26
+	xor	r28,r26
+	store	r26,(r20)
+	
+; Now we clear the DSARX interrupt in Butch
+
+;	movei	#$dfff0a,r20	;Butch DSA data register
+	subq	#6,r20		; does what the above says
+	loadw	(r20),r26	;Clears DSA interrupt 
+	or	r26,r26		;Make sure the read happened before the next
+	subq	#6,r20		;Butch DSA control register
+	load	(r20),r26	;Clears DSA pending interrupt 
+	or	r26,r26		;Make sure the read happened before the next
+fifo_read:
+	btst	#9,r27		; Check for fifo half full
+	jr	nz,do_fifo_read	;If pending then do fifo reads
+	nop
+	jump	(r25)
+	nop
+
+do_fifo_read:
+	movei	#FIFO_DATA,CDdata
+	moveq	#0,r20
+	load	(Ptrloc),Dataptr	;get pointer
+
+	load 	(CDdata),r11		;gulp some bytes from the fifo
+;	addq	#4,CDdata
+
+	load	(r20),TEMP		;be kind to butch
+
+	load 	(CDdata),r12
+;	subq	#4,CDdata
+
+	load	(r20),TEMP		;be kind to butch
+
+	load 	(CDdata),r13		;gulp some bytes from the fifo
+;	addq	#4,CDdata
+
+	load	(r20),TEMP		;be kind to butch
+
+	load 	(CDdata),r14
+;	subq	#4,CDdata
+
+	load	(r20),TEMP		;be kind to butch
+
+	load 	(CDdata),r15		;gulp some bytes from the fifo
+;	addq	#4,CDdata
+
+	load	(r20),TEMP		;be kind to butch
+
+	load 	(CDdata),r16
+;	subq	#4,CDdata
+
+	load	(r20),TEMP		;be kind to butch
+
+	load 	(CDdata),r17		;gulp some bytes from the fifo
+;	addq	#4,CDdata
+
+	load	(r20),TEMP		;be kind to butch
+
+	load 	(CDdata),r18
+;	subq	#4,CDdata
+
+	store	r11,(Dataptr)
+	addq	#4,Dataptr
+
+	store	r12,(Dataptr)
+	addq	#4,Dataptr
+
+	store	r13,(Dataptr)
+	addq	#4,Dataptr
+
+	store	r14,(Dataptr)
+	addq	#4,Dataptr
+
+	store	r15,(Dataptr)
+	addq	#4,Dataptr
+
+	store	r16,(Dataptr)
+	addq	#4,Dataptr
+
+	store	r17,(Dataptr)
+	addq	#4,Dataptr
+
+	store	r18,(Dataptr)
+	addq	#4,Dataptr
+
+;	movei	#$100000,Dataptr
+	store	Dataptr,(Ptrloc)
+
+exit_isr:
+
+	movei	#J_INT,r20	;Acknowledge in Jerry
+	movei	#$101,r28
+	storew	r28,(r20)
+
+; Stack r3
+	load	(r31),r28
+	addq	#4,r31
+	move	r28,r3
+
+; Stack r2
+	load	(r31),r28
+	addq	#4,r31
+	move	r28,r2
+
+; Stack r1
+	load	(r31),r28
+	addq	#4,r31
+	move	r28,r1
+
+; Stack r26
+	load	(r31),r28
+	addq	#4,r31
+	move	r28,r26
+
+; Stack r27
+	load	(r31),r28
+	addq	#4,r31
+	move	r28,r27
+
+; Stack r20
+	load	(r31),r28
+	addq	#4,r31
+	move	r28,r20
+
+; Stack r25
+	load	(r31),r28
+	addq	#4,r31
+	move	r28,r25
+
+;r29 already has flags
+	bclr	#3,r29		;IMASK
+	bset	#10,r29		;Clear DSP int bit in TOM
+
+	load	(r31),r28	;Load return address
+	addq	#2,r28		;Fix it up
+	addq	#4,r31		
+	jump	(r28)		;Return
+	store	r29,(r30)	;Restore broken flags
+
+
+; Setup the place to get data from
+; and the POINTER!! to where to put it
+
+SETUP:
+	movei	#PTRPOS,Ptrloc
+	movei	#STACK,r31
+
+;	movei	#$1000,r0
+
+	movei	#$1001,r1
+
+	movei	#$1002,r2
+
+	movei	#$1003,r3
+
+	movei	#$1004,r4
+
+	movei	#$1005,r5
+
+	movei	#$1006,r6
+
+	movei	#$1007,r7
+
+	movei	#$1008,r8
+
+	movei	#$1009,r9
+
+	movei	#$1010,r10
+
+	movei	#$1011,r11
+
+	movei	#$1012,r12
+
+	movei	#$1013,r13
+
+	movei	#$1014,r14
+
+	movei	#$1015,r15
+
+	movei	#$1016,r16
+
+	movei	#$1017,r17
+
+	movei	#$1018,r18
+
+	movei	#$1019,r19
+
+	movei	#$1020,r20
+
+	movei	#$1021,r21
+
+	movei	#$1022,r22
+
+	movei	#$1023,r23
+
+	movei	#$1024,r24
+
+	movei	#$1025,r25
+
+	movei	#$1026,r26
+
+	movei	#$1027,r27
+
+	movei	#$1028,r28
+
+	movei	#$1029,r29
+
+	movei	#$1030,r30
+
+;	movei	#$1031,r31
+
+loploc:
+	nop
+	jr	loploc
+	nop
+
+stackbot:
+	ds.l	10
+STACK:
+

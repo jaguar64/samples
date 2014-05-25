@@ -1,0 +1,195 @@
+; This version read 2 longs then writes them (loops 4 time) 
+; It uses and stacks 5 registers in addition to 28,29,30,31
+
+	FLAG	equ	1		; 1 means stack registers
+
+	ORG	$f03000
+
+	include		"jaguar.inc"
+	include		"cd_inits.inc"
+
+	XDEF		PTRPOS
+	XDEF		SETUP
+
+	XDEF		FIFO_READ
+	XDEF		HERE
+	XDEF		EXIT_ISR
+
+	TEMP		regequ		r28
+
+	CDdata		regequ		r27
+
+	Dataptr		regequ		r26
+
+	Ptrloc		regequ		r23
+
+; These are additions for the match stuff!!!
+
+	pattern		regequ		r21
+	fcount		regequ		r22
+	mcount		regequ		r20
+	admask		regequ		r19
+
+; The beginning of GPU memory is being used for
+; storage
+; Set GPC to SETUP
+
+CPU_VEC:
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+
+DSP_VEC:
+	movei	#(PTRPOS+(4*5)),r30
+	jump	(r30)
+	nop
+	nop
+	nop
+	nop
+
+PIT_VEC:
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+
+OBJ_VEC:
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+
+BLIT_VEC:
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+
+SETUP:
+	movei	#(PTRPOS+(4*5)),r30
+	jump	(r30)
+	nop
+
+	ALIGN LONG
+
+PTRPOS:
+;	ds.l	4
+;	ds.l	3
+	ds.l	5
+
+JERRY_ISR:
+	movei	#BUTCH,r24
+make_ptr:
+	move	pc,Ptrloc
+	movei	#(make_ptr-PTRPOS),TEMP
+	sub	TEMP,Ptrloc
+
+fifo_read:
+
+; At this point I will insert code that checks for a header match
+; This will NOT be optimized, it will repeat code that is below, etc!!!
+; *********************** IT MUST BE FIXED BEFORE RELEASE!!!!!!!!!!!!!!!!! ***************************
+
+; NOTE: MAKE SURE TO HANDLE THE CASE OF A PARTIAL HEADER THAT DOES NOT COMPLETE!!!!!!!
+
+; First we check to see if the header has 
+; a) Started (16>x>0)
+; b) Not Started (16)
+; c) Finished (0)
+
+; ptrloc points to PTRPOS, we need this plus 12
+	addq	#12,ptrloc
+	load 	(ptrloc),mcount
+	cmpq	#0,mcount
+	jr	z,got_match				; branch if match has happened!!!!! (go to got_match)
+	subq	#12,ptrloc
+	addq	#12,ptrloc
+	movei	#none_found,TEMP
+	jump	(TEMP)
+
+; ********************THIS IS THE END OF THE UN-OPTIMIZED SHIT THAT HAS TO BE FIXED****************
+
+; Check for ERROR!!!!!!!!!!!!!!!!!!!!!
+
+got_match:
+	btst	#14,r27
+none_found:
+	movei	#FIFO_DATA,CDdata			; Set up the TWO read address!!
+	moveq	#3,admask
+	moveq	#8,fcount				; Set up the number of longs in the FIFO
+	shlq	#2,admask
+	addq	#4,ptrloc
+	load	(ptrloc),pattern			; Find out the desired long
+	subq	#4,ptrloc
+	jr	pat_entry
+	nop
+patlop:
+	moveq	#16,mcount
+pat_entry:
+	jump	z,(r25)					; Check if the fifo is empty
+	load	(CDdata),TEMP				; Load data
+	xor	admask,CDdata				; prepare to load again
+	cmp	TEMP,pattern				; Is this correct
+	jr	nz,patlop				; Try again if not
+
+
+
+	nop
+	movei	#G_CTRL,r30
+	moveq	#0,r29
+	store	r29,(r30)
+	nop
+	nop
+
+
+
+;	subq	#1,fcount				; decrement fifo count
+;
+;	subq	#1,mcount				; decrement match count (GOT ONE)
+	jr	ne,patlop				; Are we done
+	store	mcount,(ptrloc)				; Store match count 'cause fcount is smaller than mcount
+							
+							; If we got here it means the header HAS BEEN FOUND
+	cmpq	#0,fcount				; Now we empty the fifo into the data buffer
+	jump	z,(r25)					; If the fifo is not already empty!
+	subq	#12,ptrloc
+	load	(Ptrloc),Dataptr			;get data storage pointer
+slop:
+	subq	#1,fcount					
+	load	(CDdata),TEMP
+	store	TEMP,(Dataptr)
+	addqt	#4,Dataptr
+	jr	z,slop
+	xor	admask,CDdata
+
+	movei	#G_CTRL,r30
+	moveq	#0,r29
+	store	r29,(r30)
+	nop
+	nop
+	nop
+	nop
+
+	align long
+
+stackbot:
+	ds.l	10
+STACK:
+

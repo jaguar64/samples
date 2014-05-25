@@ -1,0 +1,461 @@
+; This version read 2 longs then writes them (loops 4 time) 
+; It uses and stacks 5 registers in addition to 28,29,30,31
+
+	FLAG	equ	1		; 1 means stack registers
+
+	ORG	$f03000
+
+	include		"jaguar.inc"
+	include		"cd_inits.inc"
+
+	XDEF		PTRPOS
+	XDEF		SETUP
+
+	XDEF		FIFO_READ
+	XDEF		HERE
+	XDEF		EXIT_ISR
+
+	XDEF		NONE_FOUND
+	XDEF		FAKE_DATA
+
+	TEMP		regequ		r28
+
+	CDdata		regequ		r27
+
+	Dataptr		regequ		r26
+
+	Ptrloc		regequ		r23
+
+; These are additions for the match stuff!!!
+
+	pattern		regequ		r21
+	fcount		regequ		r22
+	mcount		regequ		r20
+	admask		regequ		r19
+
+; The beginning of GPU memory is being used for
+; storage
+; Set GPC to SETUP
+
+CPU_VEC:
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+
+DSP_VEC:
+	movei	#(PTRPOS+(4*5)),r30
+	jump	(r30)
+	nop
+	nop
+	nop
+	nop
+
+PIT_VEC:
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+
+OBJ_VEC:
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+
+BLIT_VEC:
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+
+SETUP:
+	movei	#$1000,r0
+
+	movei	#$1001,r1
+
+	movei	#$1002,r2
+
+	movei	#$1003,r3
+
+	movei	#$1004,r4
+
+	movei	#$1005,r5
+
+	movei	#$1006,r6
+
+	movei	#$1007,r7
+
+	movei	#$1008,r8
+
+	movei	#$1009,r9
+
+;	movei	#$1010,r10
+	movei	#$100000,r10
+
+	movei	#$1011,r11
+
+	movei	#$1012,r12
+
+	movei	#$1013,r13
+
+	movei	#$1014,r14
+
+	movei	#$1015,r15
+
+	movei	#$1016,r16
+
+	movei	#$1017,r17
+
+	movei	#$1018,r18
+
+	movei	#$1019,r19
+
+	movei	#$1020,r20
+
+	movei	#$1021,r21
+
+	movei	#$1022,r22
+
+	movei	#$1023,r23
+
+	movei	#$1024,r24
+
+	movei	#$1025,r25
+
+	movei	#$1026,r26
+
+	movei	#$1027,r27
+
+	movei	#$1028,r28
+
+	movei	#$1029,r29
+
+	movei	#$1030,r30
+
+	movei	#STACK,r31
+
+;	movei	#$f17800,r10
+;	movei	#$f17000,r12
+;	movei	#0,r14
+	movei	#loploc,r17
+loploc:
+	nop
+.if 0
+	load	(r10),r11
+	load	(r14),r15
+	load	(r12),r13
+	load	(r10),r11
+	load	(r14),r15
+	load	(r12),r13
+	load	(r10),r11
+	load	(r14),r15
+	load	(r12),r13
+	load	(r10),r11
+	load	(r14),r15
+	load	(r12),r13
+	load	(r10),r11
+	load	(r14),r15
+	load	(r12),r13
+	load	(r10),r11
+	load	(r14),r15
+	load	(r12),r13
+	load	(r10),r11
+	load	(r14),r15
+	load	(r12),r13
+	load	(r10),r11
+	load	(r14),r15
+	load	(r12),r13
+	load	(r10),r11
+	load	(r14),r15
+	load	(r12),r13
+	load	(r10),r11
+	load	(r14),r15
+	load	(r12),r13
+	load	(r10),r11
+	load	(r14),r15
+	load	(r12),r13
+	load	(r10),r11
+	load	(r14),r15
+	load	(r12),r13
+	load	(r10),r11
+	load	(r14),r15
+	load	(r12),r13
+.endif
+	jump	(r17)
+	nop
+
+	nop
+
+stuff:
+	ds.b	40
+
+	ALIGN LONG
+
+PTRPOS:
+;	ds.l	4
+;	ds.l	3
+	ds.l	5
+
+JERRY_ISR:
+	movei	#G_FLAGS,r30
+	load	(r30),r29	;read the flags
+
+.if FLAG
+; Stack r25
+	subq	#4,r31
+	store	r25,(r31)
+
+; Stack r24
+	subq	#4,r31
+	store	r24,(r31)
+
+.endif
+	movei	#BUTCH,r24
+
+.if FLAG
+
+; Stack r27
+	subq	#4,r31
+	store	r27,(r31)
+
+; Stack r26
+	subq	#4,r31
+	store	r26,(r31)
+
+; Stack r23
+	subq	#4,r31
+	store	r23,(r31)
+.endif
+
+make_ptr:
+	move	pc,Ptrloc
+	movei	#(make_ptr-PTRPOS),TEMP
+	sub	TEMP,Ptrloc
+
+HERE:
+	move	pc,r25
+	movei	#(EXIT_ISR-HERE),r27
+	add	r27,r25
+
+; Is this a DSARX interrupt?
+
+;	movei	#BUTCH,r24		; moved for pipeline
+ 	load	(r24),r27		;check for DSARX int pending
+
+	btst	#13,r27
+	jr	z,fifo_read	; This should ALWAYS fall thru the first time
+
+; Set the match bit, to allow data
+	moveq	#3,r26		; enable FIFO only
+	store	r26,(r24)
+	addq	#$10,r24
+	load	(r24),r27
+	bset	#2,r27
+	store	r27,(r24)		; Disable SUBCODE match
+	
+; Now we clear the DSARX interrupt in Butch
+
+;	movei	#$dfff04,r24	;Butch DSA control register
+	subq	#12,r24		; does what the above says
+	load	(r24),r26	;Clears DSA pending interrupt 
+	addq	#6,r24
+	loadw	(r24),r27	; Read DSA response
+	btst	#10,r27		; Check for error
+	jr	nz,error
+	or	r26,r26
+	jump	(r25)
+;	nop
+
+fifo_read:
+
+; At this point I will insert code that checks for a header match
+; This will NOT be optimized, it will repeat code that is below, etc!!!
+; *********************** IT MUST BE FIXED BEFORE RELEASE!!!!!!!!!!!!!!!!! ***************************
+
+; First we check to see if the header has 
+; a) Started (16>x>0)
+; b) Not Started (16)
+; c) Finished (0)
+
+; ptrloc points to PTRPOS, we need this plus 12
+	addq	#12,ptrloc
+	load 	(ptrloc),mcount
+	cmpq	#0,mcount
+	jr	z,got_match				; branch if match has happened!!!!! (go to got_match)
+	subq	#12,ptrloc
+	addq	#12,ptrloc
+	movei	#none_found,TEMP
+	jump	(TEMP)
+
+; ********************THIS IS THE END OF THE UN-OPTIMIZED SHIT THAT HAS TO BE FIXED****************
+
+; Check for ERROR!!!!!!!!!!!!!!!!!!!!!
+
+got_match:
+	btst	#14,r27
+	jr	z,noerror
+	bset	#31,r27
+error:
+	addq	#$10,r24
+	load	(r24),TEMP
+	or	TEMP,TEMP
+	subq	#$10,r24
+	load	(Ptrloc),TEMP
+	addq	#8,Ptrloc
+	store	TEMP,(Ptrloc)
+	subq	#8,Ptrloc
+
+noerror:
+
+	load	(Ptrloc),Dataptr	;get pointer
+
+; Check to see if we should stop
+	addq	#4,Ptrloc	
+	load	(Ptrloc),TEMP
+	subq	#4,Ptrloc	
+	cmp	Dataptr,TEMP
+	jr	pl,notend
+;	nop
+	bclr	#0,r27
+	store	r27,(r24)
+
+notend:
+	movei	#FIFO_DATA,CDdata
+	move	CDdata,r25
+	addq	#4,CDdata
+	moveq	#3,r24
+loptop:
+	load 	(CDdata),TEMP		
+	load	(r25),r30
+	addq	#4,Dataptr
+	subq	#1,r24
+	store	TEMP,(Dataptr)
+	addqt	#4,Dataptr
+	jr	pl,loptop
+	store	r30,(Dataptr)
+
+	store	Dataptr,(Ptrloc)
+
+exit_isr:
+	movei	#J_INT,r24	; Acknowledge in Jerry
+	moveq	#1,TEMP
+	bset	#8,TEMP		
+	storew	TEMP,(r24)
+
+.if FLAG
+; Stack r23
+	load	(r31),r23
+	addq	#4,r31
+
+; Stack r26
+	load	(r31),r26
+	addq	#4,r31
+
+; Stack r27
+	load	(r31),r27
+	addq	#4,r31
+
+; Stack r24
+	load	(r31),r24
+	addq	#4,r31
+
+; Stack r25
+	load	(r31),r25
+	addq	#4,r31
+
+.endif
+	movei	#G_FLAGS,r30
+
+;r29 already has flags
+	bclr	#3,r29		;IMASK
+	bset	#10,r29		;Clear DSP int bit in TOM
+
+	load	(r31),r28	;Load return address
+
+
+	addq	#2,r28		;Fix it up
+	addq	#4,r31		
+	jump	(r28)		;Return
+	store	r29,(r30)	;Restore broken flags
+
+none_found:
+	movei	#FIFO_DATA,CDdata	; Set up the TWO read address!!
+	moveq	#3,admask
+	moveq	#8+(1),fcount		; Set up the number of longs in FIFO
+	shlq	#2,admask
+	addq	#4,ptrloc
+	load	(ptrloc),pattern	; Find out the desired long
+	subq	#4,ptrloc
+	jr	pat_entry
+	nop
+patlop:
+	moveq	#16,mcount
+	store	mcount,(ptrloc)		; Store match count 'cause it changed
+pat_entry:
+	subq	#1,fcount		; decrement fifo count
+	jump	z,(r25)			; Check if fifo is empty (EXIT HERE!!!)
+	nop
+	xor	admask,CDdata		; prepare to load again
+	load	(CDdata),TEMP		; Load data
+
+	cmp	TEMP,pattern		; Is this correct
+	jr	nz,patlop		; Try again if not
+	nop
+
+	subq	#1,mcount		; decrement match count (GOT ONE)
+	jr	ne,pat_entry		; Are we done
+	store	mcount,(ptrloc)		; Store match count 'cause it changed
+					; If we got here, Header HAS BEEN FOUND
+	subq	#12,ptrloc
+
+	load	(Ptrloc),Dataptr	;get data storage pointer
+slop:
+	xor	admask,CDdata
+	addqt	#4,Dataptr
+	load	(CDdata),TEMP
+	store	TEMP,(Dataptr)
+	subq	#1,fcount					
+	jr	ne,slop
+	nop
+
+	store	Dataptr,(Ptrloc)
+
+	jump	(r25)
+	nop
+
+
+; Regs used:
+;	TEMP
+;	CDdata
+;	pattern !	r21
+;	fcount !	r22
+;	mcount !	r24
+;	Dataptr		
+;	admask !	r30
+;	ptrloc
+;	gotpos !	r30
+
+
+	align long
+
+stackbot:
+	ds.l	10
+STACK:
+

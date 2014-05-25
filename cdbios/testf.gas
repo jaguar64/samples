@@ -1,0 +1,299 @@
+
+	ORG	$f03000
+
+	include		"jaguar.inc"
+	include		"cd_inits.inc"
+
+	XDEF		PTRPOS
+	XDEF		SETUP
+	XDEF		test
+	XDEF		FIFO_READ
+	XDEF		DATASPOT
+
+	TEMP		regequ		r28
+
+	CDdata		regequ		r27
+	Dataptr		regequ		r26
+
+;	CDdata		regequ		r1
+;	Dataptr		regequ		r2
+
+	Ptrloc		regequ		r0
+
+; The beginning of GPU memory is being used for
+; storage
+; Set GPC to SETUP
+
+BEGIN:
+PTRPOS:
+	movei	#SETUP,r0
+	jump	(r0)
+	nop
+	nop
+	nop
+	nop
+
+EINT_ISR:
+
+	movei	#G_FLAGS,r30
+	load	(r30),r29	;read the flags
+
+; Stack r25
+	subq	#4,r31
+	store	r25,(r31)
+
+; Stack r20
+	subq	#4,r31
+	store	r20,(r31)
+
+	movei	#BUTCH,r20
+
+; Stack r27
+	subq	#4,r31
+	store	r27,(r31)
+
+; Stack r26
+	subq	#4,r31
+	store	r26,(r31)
+
+; Stack r0
+	subq	#4,r31
+	store	r0,(r31)
+
+;	nop
+
+	movei	#exit_isr,r25
+
+; Is this a DSARX interrupt?
+
+;	movei	#BUTCH,r20		; moved for pipeline
+	load	(r20),r27		;check for DSARX int pending
+
+	btst	#13,r27
+	jr	z,fifo_read	; This should ALWAYS be taken the first time
+
+; Toggle the match bit, to allow data
+
+	moveq	#3,r26		; enable FIFO only
+;	moveq	#0,r26
+	store	r26,(r20)
+	addq	#$10,r20
+	load	(r20),r27
+	bset	#1,r27
+	bset	#2,r27
+	store	r27,(r20)		; Disable SUBCODE match
+	
+; Now we clear the DSARX interrupt in Butch
+
+;	movei	#$dfff0a,r20	;Butch DSA control register
+	subq	#12,r20		; does what the above says
+	load	(r20),r26	;Clears DSA pending interrupt 
+	addq	#6,r20
+	loadw	(r20),r27	; Read DSA response
+	btst	#10,r27		; Check for error
+	jr	nz,error
+	or	r26,r26
+	jump	(r25)
+
+fifo_read:
+
+	nop
+	movei	#PTRPOS,Ptrloc
+
+; This turns JERRY I2S off
+
+;	addq	#$10,r20
+;	load	(r20),r28
+;	bclr	#1,r28
+;	store	r28,(r20)
+;	subq	#$10,r27
+
+; Check for ERROR!!!!!!!!!!!!!!!!!!!!!
+
+	btst	#14,r27
+	jr	z,noerror
+	bset	#31,r27
+error:
+	addq	#16,r20
+	load	(r20),r20	; Read to clear error
+	load	(Ptrloc),TEMP
+	addq	#8,Ptrloc
+	store	TEMP,(Ptrloc)
+	addq	#4,Ptrloc
+	store	r27,(Ptrloc)
+	subq	#12,Ptrloc
+
+noerror:
+
+	load	(Ptrloc),Dataptr	;get pointer
+
+; Check to see if we should stop
+	addq	#4,Ptrloc	
+	load	(Ptrloc),TEMP
+	subq	#4,Ptrloc	
+	cmp	Dataptr,TEMP
+	jr	pl,notend
+	nop
+	bclr	#0,r27
+	store	r27,(r20)
+notend:
+
+	movei	#FIFO_DATA+4,CDdata
+	moveq	#3,r20
+loptop:
+	load 	(CDdata),TEMP
+	load	(r20),r25
+	load	(CDdata),r30
+	addq	#4,Dataptr
+	store	TEMP,(Dataptr)
+	subq	#1,r20
+	addqt	#4,Dataptr
+	jr	pl,loptop
+	store	r30,(Dataptr)
+	nop
+
+;	movei	#$100000,Dataptr
+	store	Dataptr,(Ptrloc)
+
+exit_isr:
+
+	movei	#J_INT,r20	;Acknowledge in Jerry
+	movei	#$101,r28
+	storew	r28,(r20)
+
+; Stack r0
+	load	(r31),r0
+	addq	#4,r31
+
+; Stack r26
+	load	(r31),r26
+	addq	#4,r31
+
+; Stack r27
+	load	(r31),r27
+	addq	#4,r31
+
+; Stack r20
+	load	(r31),r20
+	addq	#4,r31
+
+; Stack r25
+	load	(r31),r25
+	addq	#4,r31
+
+	movei	#G_FLAGS,r30
+
+;r29 already has flags
+	bclr	#3,r29		;IMASK
+	bset	#10,r29		;Clear DSP int bit in TOM
+
+	load	(r31),r28	;Load return address
+	addq	#2,r28		;Fix it up
+	addq	#4,r31		
+	jump	(r28)		;Return
+	store	r29,(r30)	;Restore broken flags
+
+
+; Setup the place to get data from
+; and the POINTER!! to where to put it
+
+SETUP:
+	movei	#STACK,r31
+
+	movei	#$1000,r0
+
+	movei	#$1001,r1
+
+	movei	#$1002,r2
+
+	movei	#$1003,r3
+
+	movei	#$1004,r4
+
+	movei	#$1005,r5
+
+	movei	#$1006,r6
+
+	movei	#$1007,r7
+
+	movei	#$1008,r8
+
+	movei	#$1009,r9
+
+	movei	#$1010,r10
+
+	movei	#$1011,r11
+
+	movei	#$1012,r12
+
+	movei	#$1013,r13
+
+	movei	#$1014,r14
+
+	movei	#$1015,r15
+
+	movei	#$1016,r16
+
+	movei	#$1017,r17
+
+	movei	#$1018,r18
+
+	movei	#$1019,r19
+
+	movei	#$1020,r20
+
+	movei	#$1021,r21
+
+	movei	#$1022,r22
+
+	movei	#$1023,r23
+
+	movei	#$1024,r24
+
+	movei	#$1025,r25
+
+	movei	#$1026,r26
+
+	movei	#$1027,r27
+
+	movei	#$1028,r28
+
+	movei	#$1029,r29
+
+	movei	#$1030,r30
+
+;	movei	#$1031,r31
+
+	movei	#dataspot,r7
+	movei	#BG,r5
+	moveq	#0,r6
+	moveq	#2,r9
+	moveq	#3,r10
+	move	r6,r8
+loploc:
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	addq	#1,r6
+;	store	r8,(r7)
+;	storew	r6,(r5)
+;	store	r6,(r7)
+	jr	loploc
+	nop
+
+.align long
+stackbot:
+	ds.l	10
+STACK:
+
+dataspot:
+	ds.l	1
+
